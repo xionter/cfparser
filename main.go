@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/chromedp/chromedp"
 	"regexp"
 	"sync"
-	"github.com/chromedp/chromedp"
 )
 
-func unique(arr []string) []string{
+func unique(arr []string) []string {
 	var unique []string
 	for i := 0; i < len(arr); i += 2 {
 		unique = append(unique, arr[i])
@@ -24,15 +24,15 @@ func handleProblem(parent context.Context, problem string) {
 	var outputs []string
 
 	err := chromedp.Run(ctx, chromedp.Navigate(problem),
-				chromedp.WaitReady("div.input"),
+		chromedp.WaitReady("div.input"),
 
-				chromedp.Evaluate(`
+		chromedp.Evaluate(`
 				Array.from(document.querySelectorAll("div.input"))
 				.map((title) => title.children[1].innerText)
 				`, &inputs),
 
-				chromedp.WaitReady("div.output"),
-				chromedp.Evaluate(`
+		chromedp.WaitReady("div.output"),
+		chromedp.Evaluate(`
 				Array.from(document.querySelectorAll("div.output"))
 				.map((title) => title.children[1].innerText)
 				`, &outputs))
@@ -54,8 +54,8 @@ func handleContest(parent context.Context, contest string) {
 	problemPattern := `/problem/\w+/?$`
 	var tasks []string
 	err := chromedp.Run(ctx, chromedp.Navigate(contest),
-						chromedp.WaitReady(".problems"),
-						chromedp.Evaluate(`
+		chromedp.WaitReady(".problems"),
+		chromedp.Evaluate(`
 						Array.from(document.querySelectorAll("a"))
 						.map(a => a.href)
 						`, &tasks))
@@ -68,7 +68,7 @@ func handleContest(parent context.Context, contest string) {
 	for _, problem := range tasks {
 		match, _ := regexp.MatchString(problemPattern, problem)
 		if match {
-			problems= append(problems, problem)
+			problems = append(problems, problem)
 		}
 	}
 	problems = unique(problems)
@@ -79,9 +79,9 @@ func handleContest(parent context.Context, contest string) {
 
 func main() {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-					chromedp.Flag("headless", false),
-					chromedp.Flag("enable-automation", false),
-					chromedp.Flag("disable-blink-features", "AutomationControlled"))
+		chromedp.Flag("headless", false),
+		chromedp.Flag("enable-automation", false),
+		chromedp.Flag("disable-blink-features", "AutomationControlled"))
 
 	allocCtx, alocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer alocCancel()
@@ -92,8 +92,8 @@ func main() {
 
 	var urls []string
 	err := chromedp.Run(ctx, chromedp.Navigate(url),
-			chromedp.WaitReady(".contests-table.group-contests-container"),
-			chromedp.Evaluate(`
+		chromedp.WaitReady(".contests-table.group-contests-container"),
+		chromedp.Evaluate(`
 			Array.from(document.querySelectorAll("a"))
 			.map(a => a.href)
 			`, &urls))
