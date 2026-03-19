@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-//	"time"
 	"regexp"
 	"sync"
 	"github.com/chromedp/chromedp"
@@ -18,18 +17,48 @@ func unique(arr []string) []string{
 }
 
 func handleProblem(parent context.Context, problem string) {
+	ctx, cancel := chromedp.NewContext(parent)
+	defer cancel()
+
+	var inputs []string
+	var outputs []string
+
+	err := chromedp.Run(ctx, chromedp.Navigate(problem),
+				chromedp.WaitReady("div.input"),
+
+				chromedp.Evaluate(`
+				Array.from(document.querySelectorAll("div.input"))
+				.map((title) => title.children[1].innerText)
+				`, &inputs),
+
+				chromedp.WaitReady("div.output"),
+				chromedp.Evaluate(`
+				Array.from(document.querySelectorAll("div.output"))
+				.map((title) => title.children[1].innerText)
+				`, &outputs))
+
+	if err != nil {
+		fmt.Println("coulndt handle contest input", err)
+		return
+	}
+
+	fmt.Println(">Task")
+	fmt.Println(inputs)
+	fmt.Println(outputs)
+	fmt.Println("End Task<")
 }
 
 func handleContest(parent context.Context, contest string) {
 	ctx, cancel := chromedp.NewContext(parent)
+	defer cancel()
 	problemPattern := `/problem/\w+/?$`
 	var tasks []string
 	err := chromedp.Run(ctx, chromedp.Navigate(contest),
-						chromedp.WaitVisible(".problems"),
+						chromedp.WaitReady(".problems"),
 						chromedp.Evaluate(`
-						Array.from(document.querySelectorAll("a")).map(a => a.href)
+						Array.from(document.querySelectorAll("a"))
+						.map(a => a.href)
 						`, &tasks))
-	cancel()
 	if err != nil {
 		fmt.Println("coulndt handle contest", err)
 		return
@@ -43,15 +72,9 @@ func handleContest(parent context.Context, contest string) {
 		}
 	}
 	problems = unique(problems)
-	
-	var wg sync.WaitGroup
 	for _, problem := range problems {
-		wg.Go(func() {
-			fmt.Println(problem)
-			handleProblem(ctx, problem)
-		})
+		handleProblem(ctx, problem)
 	}
-	wg.Wait()
 }
 
 func main() {
@@ -69,9 +92,10 @@ func main() {
 
 	var urls []string
 	err := chromedp.Run(ctx, chromedp.Navigate(url),
-			chromedp.WaitVisible(".contests-table.group-contests-container"),
+			chromedp.WaitReady(".contests-table.group-contests-container"),
 			chromedp.Evaluate(`
-			Array.from(document.querySelectorAll("a")).map(a => a.href)
+			Array.from(document.querySelectorAll("a"))
+			.map(a => a.href)
 			`, &urls))
 
 	if err != nil {
@@ -85,7 +109,6 @@ func main() {
 		match, _ := regexp.MatchString(contestPattern, url)
 		if match {
 			wg.Go(func() {
-				fmt.Printf("Contest#%v\n", url)
 				handleContest(ctx, url)
 			})
 		}
