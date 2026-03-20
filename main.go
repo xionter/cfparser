@@ -53,12 +53,11 @@ func main() {
 		fmt.Printf("couldn't visit given url: %v and extract contests %v", url, err)
 		return
 	}
-
 	n := len(contestNames)
 	for i := range n {
-		fmt.Printf("%v) %v ", i+1, strings.TrimSpace(contestNames[i]))
-		if contestRemainingTime[i] != "" {
-			fmt.Printf("(remaining time: %v)", contestRemainingTime[i])
+		fmt.Printf("%v) %v ", i+1, strings.TrimSpace(contestNames[n-i-1]))
+		if contestRemainingTime[n-i-1] != "" {
+			fmt.Printf("(remaining time: %v)", contestRemainingTime[n-i-1])
 		}
 		fmt.Println()
 	}
@@ -66,16 +65,17 @@ func main() {
 	fmt.Printf("Specify contest№ to scrape(1 - %v):\n", n)
 	var pick int
 	_, err = fmt.Scan(&pick)
-	pick--
+	pick = n - pick
+
 	if err != nil {
 		fmt.Printf("Plese provide valid number. err: %v", err)
 		return
 	}
 
-	handleContest(ctx, contestURL[pick])
+	handleContest(fmt.Sprintf("contest%d", n+pick), ctx, contestURL[pick])
 }
 
-func handleContest(parent context.Context, contest string) {
+func handleContest(contestPath string, parent context.Context, contest string) {
 	ctx, cancel := chromedp.NewContext(parent)
 	defer cancel()
 	var problems []string
@@ -90,19 +90,19 @@ func handleContest(parent context.Context, contest string) {
 		fmt.Println("coulndt handle contest", err)
 		return
 	}
-
 	var wg sync.WaitGroup
 	for _, problem := range problems {
 		idx := strings.LastIndex(problem, "/")
 		name := "problem" + problem[idx+1:]
+		path := filepath.Join("..", contestPath, name)
 		wg.Go(func() {
-			handleProblem(name, ctx, problem)
+			handleProblem(path, ctx, problem)
 		})
 	}
 	wg.Wait()
 }
 
-func handleProblem(name string, parent context.Context, problem string) {
+func handleProblem(path string, parent context.Context, problem string) {
 	ctx, cancel := chromedp.NewContext(parent)
 	defer cancel()
 
@@ -128,15 +128,14 @@ func handleProblem(name string, parent context.Context, problem string) {
 		return
 	}
 	
-
-	problemPath := filepath.Join("tests", name)
-	err = os.MkdirAll(problemPath, 0755)
+	testsPath := filepath.Join(path, "tests")
+	err = os.MkdirAll(testsPath, 0755)
 	if err != nil {
-		fmt.Println("couldn't create a tests directory for problem:", name)
+		fmt.Println("couldn't create a tests directory for problem:", testsPath)
 		return
 	}
-	writeData(filepath.Join(problemPath, "input"), inputs)
-	writeData(filepath.Join(problemPath, "output"), outputs)
+	writeData(filepath.Join(testsPath, "input"), inputs)
+	writeData(filepath.Join(testsPath, "output"), outputs)
 }
 
 func writeData(path string, data []string) {
