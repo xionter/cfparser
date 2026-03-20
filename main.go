@@ -63,7 +63,7 @@ func main() {
 		fmt.Println()
 	}
 
-	fmt.Printf("Specify contest number to scrape(1 - %v):\n", n)
+	fmt.Printf("Specify contest№ to scrape(1 - %v):\n", n)
 	var pick int
 	_, err = fmt.Scan(&pick)
 	pick--
