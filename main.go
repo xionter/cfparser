@@ -3,19 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"sync"
-
-	"github.com/chromedp/chromedp"
-
-	//	"sync"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"github.com/chromedp/chromedp"
 )
 
-func main() {
+type Contest struct {
+	name          string
+	url           string
+	remainingTime string
+}
 
+func main() {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", false),
 		chromedp.Flag("enable-automation", false),
@@ -32,17 +33,17 @@ func main() {
 	var contestNames []string
 	var contestRemainingTime []string
 	err := chromedp.Run(ctx, chromedp.Navigate(url),
-				chromedp.WaitReady("tr[data-groupcontestid]"),
-				chromedp.Evaluate(`
+		chromedp.WaitReady("tr[data-groupcontestid]"),
+		chromedp.Evaluate(`
 				Array.from(document.querySelectorAll('tr[data-groupcontestid]'))
 				.map(contest => contest.children[0].children[1].href)
 					`, &contestURL),
 
-				chromedp.Evaluate(`
+		chromedp.Evaluate(`
 				Array.from(document.querySelectorAll('tr[data-groupcontestid]')).
 				map(contest => contest.children[0].firstChild.data)	
 				`, &contestNames),
-				chromedp.Evaluate(`
+		chromedp.Evaluate(`
 				Array.from(document.querySelectorAll('tr[data-groupcontestid]'))
 				.map(contest => contest.children[3]?.children[2])
 				.map(standings => standings?.children[0]?.children[0]?.title)	
@@ -52,15 +53,16 @@ func main() {
 		fmt.Printf("couldn't visit given url: %v and extract contests %v", url, err)
 		return
 	}
+
 	n := len(contestNames)
 	for i := range n {
-		fmt.Printf("%v) %v ", i + 1, strings.TrimSpace(contestNames[i]))
+		fmt.Printf("%v) %v ", i+1, strings.TrimSpace(contestNames[i]))
 		if contestRemainingTime[i] != "" {
 			fmt.Printf("(remaining time: %v)", contestRemainingTime[i])
 		}
 		fmt.Println()
 	}
-	
+
 	fmt.Printf("Specify contest number to scrape(1 - %v):\n", n)
 	var pick int
 	_, err = fmt.Scan(&pick)
@@ -69,37 +71,32 @@ func main() {
 		fmt.Printf("Plese provide valid number. err: %v", err)
 		return
 	}
+
 	handleContest(ctx, contestURL[pick])
 }
 
 func handleContest(parent context.Context, contest string) {
 	ctx, cancel := chromedp.NewContext(parent)
 	defer cancel()
-	problemPattern := `/problem/\w+/?$`
-	var tasks []string
+	var problems []string
 	err := chromedp.Run(ctx, chromedp.Navigate(contest),
-		chromedp.WaitReady(".problems"),
-		chromedp.Evaluate(`
-						Array.from(document.querySelectorAll("a"))
-						.map(a => a.href)
-						`, &tasks))
+							chromedp.WaitReady(".problems"),
+							chromedp.Evaluate(`
+							Array.from(document.querySelectorAll(".problems > tbody > tr"))
+							.slice(1)
+							.map(problem => problem.children[0].children[0].href)
+							`, &problems))
 	if err != nil {
 		fmt.Println("coulndt handle contest", err)
 		return
 	}
 
-	var problems []string
-	for _, problem := range tasks {
-		match, _ := regexp.MatchString(problemPattern, problem)
-		if match {
-			problems = append(problems, problem)
-		}
-	}
-	problems = makeUnique(problems)
 	var wg sync.WaitGroup
-	for i, problem := range problems {
+	for _, problem := range problems {
+		idx := strings.LastIndex(problem, "/")
+		name := "problem" + problem[idx+1:]
 		wg.Go(func() {
-			handleProblem(fmt.Sprintf("problem%d", i + 1), ctx, problem)
+			handleProblem(name, ctx, problem)
 		})
 	}
 	wg.Wait()
@@ -130,47 +127,25 @@ func handleProblem(name string, parent context.Context, problem string) {
 		fmt.Println("coulnd't handle contest IO", err)
 		return
 	}
-	writeData(name, inputs, outputs)
-}
+	
 
-func writeData(name string, input []string, output []string) {
-	folderPath := filepath.Join("tests", name)
-	err := os.MkdirAll(folderPath, 0755)
+	problemPath := filepath.Join("tests", name)
+	err = os.MkdirAll(problemPath, 0755)
 	if err != nil {
-		fmt.Println("couldn't create a tests directory")
+		fmt.Println("couldn't create a tests directory for problem:", name)
 		return
 	}
+	writeData(filepath.Join(problemPath, "input"), inputs)
+	writeData(filepath.Join(problemPath, "output"), outputs)
+}
 
-	for i := range len(input) {
-		path := filepath.Join(folderPath, fmt.Sprintf("input%d", i + 1))
-		f, err := os.Create(path)
+func writeData(path string, data []string) {
+	for i := range len(data) {
+		f, err := os.Create(fmt.Sprintf("%s%d", path, i + 1))
 		if err != nil {
 			fmt.Printf("couldn't create file %v \n", path)
 		}
-		f.WriteString(input[i])
-		f.Close()
-		path = filepath.Join(folderPath, fmt.Sprintf("output%d", i + 1))
-		f, err = os.Create(path)
-		if err != nil {
-			fmt.Printf("couldn't create file %v \n", path)
-		}
-		f.WriteString(output[i])
-		f.Close()
+		f.WriteString(data[i])
+		defer f.Close()
 	}
-}
-
-func makeUnique(arr []string) []string {
-	var unique []string
-	for i := 0; i < len(arr); i += 2 {
-		unique = append(unique, arr[i])
-	}
-	return unique
-}
-
-func folderExists(path string) bool {
-	status, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return status.IsDir()
 }
