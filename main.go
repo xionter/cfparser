@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/chromedp/chromedp"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"github.com/chromedp/chromedp"
 )
 
 type Contest struct {
@@ -20,7 +20,8 @@ func main() {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", false),
 		chromedp.Flag("enable-automation", false),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"))
+		chromedp.Flag("disable-blink-features", "AutomationControlled"),
+		chromedp.Flag("user-data-dir", "./chromedata"))
 
 	allocCtx, alocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer alocCancel()
@@ -81,8 +82,8 @@ func handleContest(contestPath string, parent context.Context, contest string) {
 	defer cancel()
 	var problems []string
 	err := chromedp.Run(ctx, chromedp.Navigate(contest),
-							chromedp.WaitReady(".problems"),
-							chromedp.Evaluate(`
+		chromedp.WaitReady(".problems"),
+		chromedp.Evaluate(`
 							Array.from(document.querySelectorAll(".problems > tbody > tr"))
 							.slice(1)
 							.map(problem => problem.children[0].children[0].href)
@@ -128,7 +129,7 @@ func handleProblem(path string, parent context.Context, problem string) {
 		fmt.Println("coulnd't handle contest IO", err)
 		return
 	}
-	
+
 	testsPath := filepath.Join(path, "tests")
 	err = os.MkdirAll(testsPath, 0755)
 	if err != nil {
@@ -141,7 +142,7 @@ func handleProblem(path string, parent context.Context, problem string) {
 
 func writeData(path string, data []string) {
 	for i := range data {
-		f, err := os.Create(fmt.Sprintf("%s%d", path, i + 1))
+		f, err := os.Create(fmt.Sprintf("%s%d", path, i+1))
 		if err != nil {
 			fmt.Printf("couldn't create file %v \n", path)
 		}
@@ -149,4 +150,3 @@ func writeData(path string, data []string) {
 		defer f.Close()
 	}
 }
-
